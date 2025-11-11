@@ -15,7 +15,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt update
-          sudo apt install -y liblz4-dev cmake ninja-build
+          sudo apt install -y liblz4-dev cmake ninja-build wget build-essential
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -25,28 +25,29 @@ jobs:
       - name: Cache Built STL
         id: cache-stl
         uses: actions/cache@v4
-        env:
-          cache-name: cache-stl
         with:
           path: lib/stl
           key: cache-stl
+          restore-keys: cache-stl
 
       - name: Cache Python venv
         id: cache-py-venv
         uses: actions/cache@v4
-        env:
-          cache-name: cache-py-venv
         with:
           path: .python_env
           key: cache-py-venv
+          restore-keys: cache-py-venv
 
       - name: Set up switch-tools
         run: |
+          pushd .
           git clone https://github.com/switchbrew/switch-tools
-          cd switch-tools
+          pushd switch-tools
           ./autogen.sh
           ./configure 
           make -j $(nproc)
+          popd
+          popd
 
       - name: Set up Clang
         run: |
@@ -63,13 +64,19 @@ jobs:
       - name: Build Project
         run: |
           export SWITCHTOOLS=$(pwd)/switch-tools
-          cmake -B build -DCMAKE_BUILD_TYPE="MinSizeRel" -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain.cmake \
-            -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_ASM_COMPILER=clang-20 -DCMAKE_CXX_FLAGS="--stdlib=libc++" -DCMAKE_EXE_LINKER_FLAGS="--stdlib=libc++ -fuse-ld=lld-20" -DCMAKE_MODULE_LINKER_FLAGS="-fuse-ld=lld-20" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld-20"
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=MinSizeRel \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain.cmake \
+            -DCMAKE_C_COMPILER=clang-20 \
+            -DCMAKE_CXX_COMPILER=clang++-20 \
+            -DCMAKE_ASM_COMPILER=clang-20 \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld-20" \
+            -DCMAKE_MODULE_LINKER_FLAGS="-fuse-ld=lld-20" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld-20"
           cmake --build build --target all_modules_zips -j $(nproc)
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build
-          path: |
-            build/zips/*.zip
+          path: build/zips/*.zip
